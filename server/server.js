@@ -2,14 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
-const firebaseAdmin = require('firebase-admin');
 const app = express();
-
-// Firebase Admin SDK initialization
-const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS); // Replace with your actual path
-firebaseAdmin.initializeApp({
-  credential: firebaseAdmin.credential.cert(serviceAccount),
-});
 
 // CORS configuration
 app.use(cors());
@@ -17,6 +10,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 const API_KEY = process.env.API_KEY;
+const FIREBASE_API_KEY = process.env.WEB_API_KEY; // Firebase Web API Key
 
 // Function to fetch news
 function fetchNews(url, res) {
@@ -57,7 +51,7 @@ app.get("/all-news", (req, res) => {
 
 // Route to fetch country-specific news
 app.get("/country-news", (req, res) => {
-    let country = req.query.country; // Country code from query
+    let country = req.query.country;
     let pageSize = parseInt(req.query.pageSize) || 6;
     let page = parseInt(req.query.page) || 1;
 
@@ -73,39 +67,31 @@ app.get("/country-news", (req, res) => {
     fetchNews(url, res);
 });
 
-// User Registration Route
+// User Registration Route using Firebase REST API
 app.post("/register", async (req, res) => {
     const { email, password } = req.body;
-
     try {
-        // Create a new user with Firebase Authentication
-        const userRecord = await firebaseAdmin.auth().createUser({
-            email: email,
-            password: password,
-        });
-
-        res.status(201).json({ message: "User registered successfully", uid: userRecord.uid });
+        const response = await axios.post(
+            `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`,
+            { email, password, returnSecureToken: true }
+        );
+        res.status(201).json({ message: "User registered successfully", uid: response.data.localId });
     } catch (error) {
-        res.status(500).json({ message: "Error registering the user", error: error.message });
+        res.status(500).json({ message: "Error registering the user", error: error.response.data });
     }
 });
 
-// User Login Route
+// User Login Route using Firebase REST API
 app.post("/login", async (req, res) => {
     const { email, password } = req.body;
-
     try {
-        // Check if the user exists using Firebase Authentication
-        const user = await firebaseAdmin.auth().getUserByEmail(email);
-        if (!user) {
-            return res.status(401).json({ message: "Invalid credentials" });
-        }
-
-        // Firebase Authentication handles password verification automatically
-        // In real apps, you'd want to generate a session or token for further use
-        res.status(200).json({ message: "Login successful", uid: user.uid });
+        const response = await axios.post(
+            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
+            { email, password, returnSecureToken: true }
+        );
+        res.status(200).json({ message: "Login successful", uid: response.data.localId });
     } catch (error) {
-        res.status(500).json({ message: "Error logging in", error: error.message });
+        res.status(401).json({ message: "Invalid credentials", error: error.response.data });
     }
 });
 
